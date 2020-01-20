@@ -6,7 +6,7 @@ from time import time
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from torchvision import transforms
+from torchvision import transforms  #transforms are for image transformations.
 from torch.utils.tensorboard import SummaryWriter
 from bindsnet import ROOT_DIR
 from bindsnet.datasets import MNIST, DataLoader
@@ -22,14 +22,14 @@ from minibatch.util import colorize, max_without_indices
 
 def main(args):
     if args.update_steps is None:
-        args.update_steps = max(250 // args.batch_size, 1)
+        args.update_steps = max(250 // args.batch_size, 1)   #Its value is 16 # why is it always multiplied with step? #update_steps is how many batch to classify before updating the graphs
 
-    update_interval = args.update_steps * args.batch_size
+    update_interval = args.update_steps * args.batch_size   # Value is 240 #update_interval is how many pictures to classify before updating the graphs
 
     # Sets up GPU use
     torch.backends.cudnn.benchmark = False
     if args.gpu and torch.cuda.is_available():
-        torch.cuda.manual_seed_all(args.seed)
+        torch.cuda.manual_seed_all(args.seed)   #to enable reproducability of the code to get the same result
     else:
         torch.manual_seed(args.seed)
 
@@ -39,8 +39,8 @@ def main(args):
 
     n_sqrt = int(np.ceil(np.sqrt(args.n_neurons)))
 
-    if args.reduction == "sum":
-        reduction = torch.sum
+    if args.reduction == "sum":       #could have used switch to improve performance
+        reduction = torch.sum           #weight updates for the batch
     elif args.reduction == "mean":
         reduction = torch.mean
     elif args.reduction == "max":
@@ -50,7 +50,7 @@ def main(args):
 
     # Build network.
     network = DiehlAndCook2015v2(
-        n_inpt=784,
+        n_inpt=784,# input dimensions are 28x28=784
         n_neurons=args.n_neurons,
         inh=args.inh,
         dt=args.dt,
@@ -72,7 +72,7 @@ def main(args):
         root=os.path.join(ROOT_DIR, "data", "MNIST"),
         download=True,
         train=True,
-        transform=transforms.Compose(
+        transform=transforms.Compose(   #Composes several transforms together
             [transforms.ToTensor(), transforms.Lambda(lambda x: x * args.intensity)]
         ),
     )
@@ -90,44 +90,44 @@ def main(args):
 
     # Neuron assignments and spike proportions.
     n_classes = 10
-    assignments = -torch.ones(args.n_neurons)
-    proportions = torch.zeros(args.n_neurons, n_classes)
-    rates = torch.zeros(args.n_neurons, n_classes)
+    assignments = -torch.ones(args.n_neurons) #assignments is set to -1
+    proportions = torch.zeros(args.n_neurons, n_classes) #matrix of 100x10 filled with zeros
+    rates = torch.zeros(args.n_neurons, n_classes)  #matrix of 100x10 filled with zeros
 
     # Set up monitors for spikes and voltages
     spikes = {}
     for layer in set(network.layers):
-        spikes[layer] = Monitor(network.layers[layer], state_vars=["s"], time=args.time)
-        network.add_monitor(spikes[layer], name="%s_spikes" % layer)
-
+        spikes[layer] = Monitor(network.layers[layer], state_vars=["s"], time=args.time) # Monitors:  Records state variables of interest. obj:An object to record state variables from during network simulation.
+        network.add_monitor(spikes[layer], name="%s_spikes" % layer)                     #state_vars: Iterable of strings indicating names of state variables to record.
+                                                                                        #param time: If not ``None``, pre-allocate memory for state variable recording.
     weights_im = None
     spike_ims, spike_axes = None, None
 
     # Record spikes for length of update interval.
     spike_record = torch.zeros(update_interval, args.time, args.n_neurons)
 
-    if os.path.isdir(args.log_dir):
-        shutil.rmtree(args.log_dir)
+    if os.path.isdir(args.log_dir):  #checks if the path is a existing directory
+        shutil.rmtree(args.log_dir)     # is used to delete an entire directory tree
 
     # Summary writer.
-    writer = SummaryWriter(log_dir=args.log_dir, flush_secs=60)
-
-    for epoch in range(args.n_epochs):
-        print(f"\nEpoch: {epoch}\n")
+    writer = SummaryWriter(log_dir=args.log_dir, flush_secs=60) #SummaryWriter: these utilities let you log PyTorch models and metrics into a directory for visualization
+                                                                #flush_secs:  in seconds, to flush the pending events and summaries to disk.
+    for epoch in range(args.n_epochs):  #default is 1
+        print("\nEpoch: {epoch}\n")
 
         labels = []
 
         # Create a dataloader to iterate and batch data
-        dataloader = DataLoader(
+        dataloader = DataLoader(    #It represents a Python iterable over a dataset
             dataset,
-            batch_size=args.batch_size,
-            shuffle=True,
+            batch_size=args.batch_size, #how many samples per batch to load
+            shuffle=True,   #set to True to have the data reshuffled at every epoch
             num_workers=args.n_workers,
-            pin_memory=args.gpu,
+            pin_memory=args.gpu, #If True, the data loader will copy Tensors into CUDA pinned memory before returning them.
         )
 
-        for step, batch in enumerate(dataloader):
-            print(f"Step: {step}")
+        for step, batch in enumerate(dataloader): #Enumerate() method adds a counter to an iterable and returns it in a form of enumerate object
+            print("Step: {step}")
 
             global_step = 60000 * epoch + args.batch_size * step
 
@@ -190,16 +190,16 @@ def main(args):
 
                 labels = []
 
-            labels.extend(batch["label"].tolist())
+            labels.extend(batch["label"].tolist())  #for each batch or 16 pictures the labels of it is added to this list
 
             # Prep next input batch.
             inpts = {"X": batch["encoded_image"]}
             if args.gpu:
-                inpts = {k: v.cuda() for k, v in inpts.items()}
+                inpts = {k: v.cuda() for k, v in inpts.items()} #.cuda() is used to set up and run CUDA operations in the selected GPU
 
             # Run the network on the input.
             t0 = time()
-            network.run(inputs=inpts, time=args.time, one_step=args.one_step)
+            network.run(inputs=inpts, time=args.time, one_step=args.one_step)   # Simulate network for given inputs and time.
             t1 = time() - t0
 
             # Add to spikes recording.
